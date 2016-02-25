@@ -1,0 +1,35 @@
+During `make install` setup.py is called to compile/install native
+extensions. During this, setup.py looks for ffi.h and tries to determine
+if any such file is a valid ffi header.
+
+The check is rather specific and if the header doesn't look exactly like
+setup.py expects it to look, it is not included in the build, thus making
+the compilation of libffi dependent extensions fail (silently).
+
+Fix this by simply remove the verification of any ffi headers.
+
+Upstream-status: inappropriate
+
+diff --git a/setup.py b/setup.py
+index da67731..65025a1 100644
+--- a/setup.py
++++ b/setup.py
+@@ -1960,18 +1960,6 @@ class PyBuildExt(build_ext):
+             inc_dirs.append('/usr/include/ffi')
+ 
+         ffi_inc = [sysconfig.get_config_var("LIBFFI_INCLUDEDIR")]
+-        if not ffi_inc or ffi_inc[0] == '':
+-            ffi_inc = find_file('ffi.h', [], inc_dirs)
+-        if ffi_inc is not None:
+-            ffi_h = ffi_inc[0] + '/ffi.h'
+-            with open(ffi_h) as fp:
+-                while 1:
+-                    line = fp.readline()
+-                    if not line:
+-                        ffi_inc = None
+-                        break
+-                    if line.startswith('#define LIBFFI_H'):
+-                        break
+         ffi_lib = None
+         if ffi_inc is not None:
+             for lib_name in ('ffi_convenience', 'ffi_pic', 'ffi'):
