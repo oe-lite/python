@@ -1,0 +1,66 @@
+inherit c
+
+COMPATIBLE_HOST_ARCHS = ".*linux"
+PYTHON_VERSION = ""
+EXTRA_PYCONF = ""
+FILES_${PN} += "${libdir}"
+
+CLASS_DEPENDS += " \
+    native:python${PYTHON_VERSION} \
+    native:python${PYTHON_VERSION}-distutils \
+    native:python${PYTHON_VERSION}-modules \
+    python${PYTHON_VERSION}-dev \
+    python${PYTHON_VERSION}-modules \
+"
+
+do_chrpath[prefuncs] += "do_chrpath_site_packages"
+def do_chrpath_site_packages(d):
+    python_version = d.get("PYTHON_VERSION") or ""
+    chr_paths = d.get("CHRPATH_DIRS") or ""
+    libdir = d.get("libdir") or ""
+    major_cmd = "python{} -c 'import sys; print(sys.version_info.major)'".format(python_version)
+    minor_cmd = "python{} -c 'import sys; print(sys.version_info.minor)'".format(python_version)
+    major = oelite.util.shcmd(major_cmd, quiet=True).strip()
+    minor= oelite.util.shcmd(minor_cmd, quiet=True).strip()
+    path = " {}/python{}.{}/site-packages".format(libdir, major, minor)
+    chr_paths += path
+    d.set("CHRPATH_DIRS", chr_paths)
+
+python_setup() {
+    export PYTHON_MAJOR=$(python${PYTHON_VERSION} -c 'import sys; print(sys.version_info.major)')
+    export PYTHON_MINOR=$(python${PYTHON_VERSION} -c 'import sys; print(sys.version_info.minor)')
+
+    LIBDYNLOAD=${BUILD_SYSROOT}/lib/python$PYTHON_MAJOR.$PYTHON_MINOR/lib-dynload
+    export PYTHONPATH=${BUILD_SYSROOT}/lib/python$PYTHON_MAJOR.$PYTHON_MINOR:$LIBDYNLOAD
+    export PYTHONHOME=${TARGET_SYSROOT}${prefix}
+    export LDSHARED="${TARGET_PREFIX}gcc -shared"
+}
+
+do_compile_python() {
+    python_setup
+
+    python${PYTHON_VERSION} setup.py --no-user-cfg build_ext \
+        --build-lib=lib.linux-${HOST_CPU}-$PYTHON_MAJOR.$PYTHON_MINOR \
+        --build-temp=temp.linux-${HOST_CPU}-$PYTHON_MAJOR.$PYTHON_MINOR \
+        --plat-name linux-${HOST_CPU} \
+        --rpath=${libdir} \
+        ${PARALLEL_MAKE} \
+        ${EXTRA_PYCONF}
+    python${PYTHON_VERSION} setup.py build
+}
+
+do_compile() {
+    do_compile_python
+}
+
+do_install_python() {
+    python_setup
+
+    python${PYTHON_VERSION} setup.py --no-user-cfg install \
+        --prefix=${prefix} \
+        --root=${D}
+}
+
+do_install() {
+    do_install_python
+}

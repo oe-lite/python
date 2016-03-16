@@ -1,0 +1,123 @@
+The python build system compiles its own binaries for later
+use during the build. This obviously fails during a cross build,
+so patch the configure script to support defining the pgen and
+free_importlib tools in the environment, and patch the makefile
+to make use of those definitions.
+
+This patch is inspired by similar patches floating around the webs:
+https://bugs.python.org/file31991/Python-2.7.5-xcompile.patch
+
+Upstream-status: pending
+
+diff -u orig/configure new/configure
+--- orig/configure	2016-02-22 19:02:12.922161855 +0100
++++ new/configure	2016-02-22 19:04:32.385953585 +0100
+@@ -741,6 +741,8 @@
+ CONFIG_ARGS
+ SOVERSION
+ VERSION
++FREEZE_IMPORTLIB_FOR_BUILD
++PGEN_FOR_BUILD
+ PYTHON_FOR_BUILD
+ host_os
+ host_vendor
+@@ -2993,10 +2995,14 @@
+ $as_echo "$interp" >&6; }
+ 	PYTHON_FOR_BUILD='_PYTHON_PROJECT_BASE=$(abs_builddir) _PYTHON_HOST_PLATFORM=$(_PYTHON_HOST_PLATFORM) PYTHONPATH=$(shell test -f pybuilddir.txt && echo $(abs_builddir)/`cat pybuilddir.txt`:)$(srcdir)/Lib:$(srcdir)/Lib/$(PLATDIR) '$interp
+     fi
++    PGEN_FOR_BUILD="${PGEN_FOR_BUILD}"
++    FREEZE_IMPORTLIB_FOR_BUILD="${FREEZE_IMPORTLIB_FOR_BUILD}"
+ elif test "$cross_compiling" = maybe; then
+     as_fn_error $? "Cross compiling required --host=HOST-TUPLE and --build=ARCH" "$LINENO" 5
+ else
+     PYTHON_FOR_BUILD='./$(BUILDPYTHON) -E'
++    PGEN_FOR_BUILD='./$(BUILDPGEN)'
++    FREEZE_IMPORTLIB_FOR_BUILD='./$(BUILD_FREEZE_IMPORTLIB)'
+ fi
+ 
+ 
+diff -u orig/Makefile.pre.in new/Makefile.pre.in
+--- orig/Makefile.pre.in	2016-02-22 19:06:51.929739846 +0100
++++ new/Makefile.pre.in	2016-02-22 19:13:02.584381014 +0100
+@@ -219,7 +219,7 @@
+ LIBOBJS=	@LIBOBJS@
+ 
+ PYTHON=		python$(EXE)
+-BUILDPYTHON=	python$(BUILDEXE)
++BUILDPYTHON=	./python$(BUILDEXE)
+ 
+ PYTHON_FOR_BUILD=@PYTHON_FOR_BUILD@
+ _PYTHON_HOST_PLATFORM=@_PYTHON_HOST_PLATFORM@
+@@ -275,7 +275,8 @@
+ 
+ ##########################################################################
+ # Parser
+-PGEN=		Parser/pgen$(EXE)
++BUILDPGEN=Parser/pgen$(EXE)
++PGEN_FOR_BUILD=@PGEN_FOR_BUILD@
+ 
+ PSRCS=		\
+ 		Parser/acceler.c \
+@@ -705,18 +706,20 @@
+ 
+ ############################################################################
+ # Importlib
++BUILD_FREEZE_IMPORTLIB=Programs/_freeze_importlib
++FREEZE_IMPORTLIB_FOR_BUILD=@FREEZE_IMPORTLIB_FOR_BUILD@
+ 
+ Programs/_freeze_importlib.o: Programs/_freeze_importlib.c Makefile
+ 
+-Programs/_freeze_importlib: Programs/_freeze_importlib.o $(LIBRARY_OBJS_OMIT_FROZEN)
++$(BUILD_FREEZE_IMPORTLIB): Programs/_freeze_importlib.o $(LIBRARY_OBJS_OMIT_FROZEN)
+ 	$(LINKCC) $(PY_LDFLAGS) -o $@ Programs/_freeze_importlib.o $(LIBRARY_OBJS_OMIT_FROZEN) $(LIBS) $(MODLIBS) $(SYSLIBS) $(LDLAST)
+ 
+-Python/importlib_external.h: $(srcdir)/Lib/importlib/_bootstrap_external.py Programs/_freeze_importlib
+-	./Programs/_freeze_importlib \
++Python/importlib_external.h: $(srcdir)/Lib/importlib/_bootstrap_external.py $(BUILD_FREEZE_IMPORTLIB)
++	$(FREEZE_IMPORTLIB_FOR_BUILD) \
+ 		$(srcdir)/Lib/importlib/_bootstrap_external.py Python/importlib_external.h
+ 
+-Python/importlib.h: $(srcdir)/Lib/importlib/_bootstrap.py Programs/_freeze_importlib
+-	./Programs/_freeze_importlib \
++Python/importlib.h: $(srcdir)/Lib/importlib/_bootstrap.py $(BUILD_FREEZE_IMPORTLIB)
++	$(FREEZE_IMPORTLIB_FOR_BUILD) \
+ 		$(srcdir)/Lib/importlib/_bootstrap.py Python/importlib.h
+ 
+ 
+@@ -777,14 +780,14 @@
+ 
+ $(IO_OBJS): $(IO_H)
+ 
+-$(GRAMMAR_H): $(GRAMMAR_INPUT) $(PGEN)
++$(GRAMMAR_H): $(GRAMMAR_INPUT) $(BUILDPGEN)
+ 		@$(MKDIR_P) Include
+-		$(PGEN) $(GRAMMAR_INPUT) $(GRAMMAR_H) $(GRAMMAR_C)
++		$(PGEN_FOR_BUILD) $(GRAMMAR_INPUT) $(GRAMMAR_H) $(GRAMMAR_C)
+ $(GRAMMAR_C): $(GRAMMAR_H)
+ 		touch $(GRAMMAR_C)
+ 
+-$(PGEN): $(PGENOBJS)
+-		$(CC) $(OPT) $(PY_LDFLAGS) $(PGENOBJS) $(LIBS) -o $(PGEN)
++$(BUILDPGEN): $(PGENOBJS)
++		$(CC) $(OPT) $(PY_LDFLAGS) $(PGENOBJS) $(LIBS) -o $(BUILDPGEN)
+ 
+ Parser/grammar.o:	$(srcdir)/Parser/grammar.c \
+ 				$(srcdir)/Include/token.h \
+@@ -1582,7 +1585,7 @@
+ 	find build -name '*.py[co]' -exec rm -f {} ';' || true
+ 	-rm -f pybuilddir.txt
+ 	-rm -f Lib/lib2to3/*Grammar*.pickle
+-	-rm -f Programs/_testembed Programs/_freeze_importlib
++	-rm -f Programs/_testembed $(BUILD_FREEZE_IMPORTLIB)
+ 	-rm -rf build
+ 
+ profile-removal:
+@@ -1592,7 +1595,7 @@
+ 	rm -rf $(COVERAGE_REPORT)
+ 
+ clobber: clean profile-removal
+-	-rm -f $(BUILDPYTHON) $(PGEN) $(LIBRARY) $(LDLIBRARY) $(DLLLIBRARY) \
++	-rm -f $(BUILDPYTHON) $(BUILDPGEN) $(LIBRARY) $(LDLIBRARY) $(DLLLIBRARY) \
+ 		tags TAGS \
+ 		config.cache config.log pyconfig.h Modules/config.c
+ 	-rm -rf build platform

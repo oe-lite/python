@@ -1,0 +1,27 @@
+require ${PN}.inc
+MAJOR_PV = "3"
+MINOR_PV = "5"
+MINOR_M = "m"
+
+DEPENDS += "libmpdec"
+DEPENDS_${PN}-modules += "libmpdec"
+RDEPENDS_${PN}-modules += "libmpdec"
+EXTRA_OEMAKE_COMPILE:>native = " Programs/_freeze_importlib"
+
+DO_INSTALL_FREEZE = ""
+DO_INSTALL_FREEZE:native = "do_install_freeze"
+do_install[postfuncs] += "${DO_INSTALL_FREEZE}"
+do_install_freeze () {
+    install -m 0755 ${S}/Programs/_freeze_importlib \
+        ${D}${bindir}/freeze_importlib
+}
+
+# Python installs libpython${MAJOR_PV}.so without a library
+# version, so fix this to make auto-package-libs and
+# packageqa happy
+do_install[postfuncs] += "do_install_lib"
+do_install_lib() {
+    # rename and symlink the python lib to make it consistent with other libraries
+    mv ${D}${libdir}/${LIBPYTHON}.so ${D}${libdir}/${LIBPYTHON}.so.${LIBRARY_VERSION}
+    ln -s ${LIBPYTHON}.so.${LIBRARY_VERSION} ${D}${libdir}/${LIBPYTHON}.so
+}
