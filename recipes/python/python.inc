@@ -152,13 +152,14 @@ FILES_${PN} = " \
 "
 PROVIDES_${PN} = "${PN}${MAJOR_PV}"
 PROVIDES_${PN}-dev = "${PN}${MAJOR_PV}-dev"
-DEPENDS_${PN} = "${PN}-libpython${MAJOR_PV} ${PN}${MAJOR_PV}-modules ${PN}-symlink"
-RDEPENDS_${PN} = "${PN}-libpython${MAJOR_PV} ${PN}${MAJOR_PV}-modules ${PN}-symlink"
+DEPENDS_${PN} = "${PN}-libpython${MAJOR_PV} ${PN}${MAJOR_PV}-modules ${PN}${MAJOR_PV}-symlink"
+RDEPENDS_${PN} = "${PN}-libpython${MAJOR_PV} ${PN}${MAJOR_PV}-modules ${PN}${MAJOR_PV}-symlink"
 
 # python2 install a symlink, while python3 doesn't. Try to align this
 # by always creating the symlink and split it out in a separate package
 PACKAGES =+ "${PN}-symlink"
 FILES_${PN}-symlink = "${bindir}/python"
+PROVIDES_${PN}-symlink = "${PN}${MAJOR_PV}-symlink"
 do_install[postfuncs] += "do_install_symlink"
 do_install_symlink() {
     ln -sf ./python${MAJOR_PV} ${D}${bindir}/python
