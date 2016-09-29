@@ -239,7 +239,7 @@ AUTO_PACKAGE_UTILS_RDEPENDS = "python${MAJOR_PV}"
 # Provide version dependent packages to ensure the
 # right version is used to build for target
 PROVIDES_${PN}-pgen:>native = " ${PN}${MAJOR_PV}-pgen"
-PROVIDES_${PN}-freeze-importlib:>native += "${PN}${MAJOR_PV}-freeze-importlib"
+PROVIDES_${PN}-freeze-importlib:>native = " ${PN}${MAJOR_PV}-freeze-importlib"
 
 # Add symlinked files to each util package
 FILES_${PN}-2to3 += "${bindir}/2to3-${MAJOR_PV}.${MINOR_PV} ${bindir}/2to3"
